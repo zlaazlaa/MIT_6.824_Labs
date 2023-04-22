@@ -26,8 +26,11 @@ type RequireJobArgs struct {
 }
 
 type RequireJobReply struct {
-	FileName string
-	ClientId int
+	FileName  string
+	ClientId  int
+	JobType   int
+	ClientSum int
+	HashNow   int
 }
 
 type ReceiveResultArgs struct {
@@ -37,7 +40,9 @@ type ReceiveResultReply struct {
 }
 
 type TellFinishArgs struct {
-	ClientId int
+	JobType     int
+	ClientId    int
+	HashNowList map[int]bool
 }
 
 type TellFinishReply struct {

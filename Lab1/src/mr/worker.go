@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -34,64 +35,110 @@ func ihash(key string) int {
 }
 
 // main/mrworker.go calls this function.
-func Worker(mapf func(string, string) []KeyValue,
-	reducef func(string, []string) string) {
-
-	// Your worker implementation here.
-
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
-	filename, ClientId := RequireAJob()
-	if filename == "error" {
-		return
+func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
+	for {
+		filename, ClientId, JobType, ClientSum, HashNow := RequireAJob()
+		if JobType == 0 {
+			DoingMap(filename, ClientId, mapf)
+			fmt.Println("Done the map")
+		} else if JobType == 1 {
+			DoingReduce(ClientSum, HashNow, ClientId, reducef)
+			fmt.Println("Done the reduce")
+		}
 	}
+}
 
-	var kva = DealSingleFile(filename, mapf)
-
+func DoingReduce(ClientSum int, hashNow int, ClientId int, reducef func(string, []string) string) {
+	fmt.Printf("Doing a reduce job, client id = %d, hashNow = %d, clientsum = %d\n", ClientId, hashNow, ClientSum)
+	i := 1
+	mainName := "mr-out" + strconv.Itoa(ClientId)
+	mainFile, _ := os.Create(mainName)
+	defer func(mainFile *os.File) {
+		err := mainFile.Close()
+		if err != nil {
+			return
+		}
+	}(mainFile)
+	var kva []KeyValue
+	for i < ClientSum {
+		OName := "mr-" + strconv.Itoa(i) + "-" + strconv.Itoa(hashNow)
+		OFile, err := os.OpenFile(OName, os.O_RDONLY, 0644)
+		if err != nil {
+			continue
+		}
+		dec := json.NewDecoder(OFile)
+		err = OFile.Close()
+		if err != nil {
+			return
+		}
+		for {
+			var kv KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			kva = append(kva, kv)
+		}
+	}
 	sort.Sort(ByKey(kva))
-
-	oname := "mr-out-" + strconv.Itoa(ClientId)
-	ofile, _ := os.Create(oname)
-
-	//
-	// call Reduce on each distinct key in kva[],
-	// and print the result to mr-out-0.
-	//
-	i := 0
-	for i < len(kva) {
+	l := 0
+	for l < len(kva) {
 		j := i + 1
-		for j < len(kva) && kva[j].Key == kva[i].Key {
-			j++
+		for j < len(kva) {
+			if kva[i].Key != kva[j].Key {
+				break
+			}
 		}
 		var values []string
 		for k := i; k < j; k++ {
-			values = append(values, kva[k].Value)
+			values = append(values, kva[i].Value)
 		}
 		output := reducef(kva[i].Key, values)
-
-		// this is the correct format for each line of Reduce output.
-		fmt.Fprintf(ofile, "%v %v\n", kva[i].Key, output)
-
+		fmt.Fprintf(mainFile, "%v %v\n", kva[i].Key, output)
 		i = j
 	}
-
-	ofile.Close()
-	TellFinish(ClientId)
+	TellFinish(ClientId, make(map[int]bool), 1)
 }
 
-func TellFinish(ClientId int) {
-	args := TellFinishArgs{ClientId: ClientId}
+func DoingMap(filename string, ClientId int, mapf func(string, string) []KeyValue) {
+	fmt.Printf("Doing a map job, client id = %d, filename = %s\n", ClientId, filename)
+	if filename == "error" || ClientId == 0 {
+		return
+	}
+	var HanhNowList = make(map[int]bool)
+	var kva = DealSingleFile(filename, mapf)
+	for x, valuee := range kva {
+		fmt.Println(x, valuee)
+	}
+	i := 0
+	for i < len(kva) {
+		hashNow := ihash(kva[i].Key)
+		HanhNowList[hashNow] = true
+		oname := "mr-" + strconv.Itoa(ClientId) + "-" + strconv.Itoa(hashNow)
+		ofile, _ := os.OpenFile(oname, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		kvv := KeyValue{kva[i].Key, kva[i].Value}
+		enc := json.NewEncoder(ofile)
+		enc.Encode(&kvv)
+		ofile.Close()
+		i++
+	}
+	TellFinish(ClientId, HanhNowList, 0)
+}
+
+func TellFinish(ClientId int, list map[int]bool, JobType int) bool {
+	args := TellFinishArgs{ClientId: ClientId, HashNowList: list, JobType: JobType}
 	reply := TellFinishReply{}
 
 	ok := call("Coordinator.TellFinish", &args, &reply)
 	if ok {
 		fmt.Println("Client " + string(rune(ClientId)) + "ok!")
+		return true
 	} else {
 		fmt.Println("Error, can tell finish!")
+		return false
 	}
 }
 
-func RequireAJob() (string, int) {
+func RequireAJob() (string, int, int, int, int) {
 	// Require a job, return a file name
 
 	args := RequireJobArgs{}
@@ -101,10 +148,10 @@ func RequireAJob() (string, int) {
 	if ok {
 		fmt.Println(reply.FileName)
 		fmt.Println("Doing on " + reply.FileName)
-		return reply.FileName, reply.ClientId
+		return reply.FileName, reply.ClientId, reply.JobType, reply.ClientSum, reply.HashNow
 	} else {
 		fmt.Println("Error, no job reply!")
-		return "error", 0
+		return "error", 0, 0, 0, 0
 	}
 }
 
