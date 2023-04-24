@@ -47,6 +47,12 @@ func main() {
 		}
 		file.Close()
 		kva := mapf(filename, string(content))
+		for _, valuee := range kva {
+			if valuee.Key == "a" {
+				fmt.Printf("666   ")
+				fmt.Println(valuee.Key, valuee.Value)
+			}
+		}
 		intermediate = append(intermediate, kva...)
 	}
 
@@ -89,8 +95,14 @@ func main() {
 // load the application Map and Reduce functions
 // from a plugin file, e.g. ../mrapps/wc.so
 func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(string, []string) string) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("加载插件失败：", err)
+		}
+	}()
 	p, err := plugin.Open(filename)
 	if err != nil {
+		panic(err)
 		log.Fatalf("cannot load plugin %v", filename)
 	}
 	xmapf, err := p.Lookup("Map")

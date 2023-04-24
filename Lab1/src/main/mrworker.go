@@ -19,26 +19,38 @@ import "log"
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Fprintf(os.Stderr, "Usage: mrworker xxx.so\n")
-		os.Exit(1)
+		//os.Exit(1)
 	}
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("plugin had been opened")
+		}
+	}()
 
-	mapf, reducef := loadPlugin(os.Args[1])
-
+	//mapf, reducef := loadPlugin(os.Args[1])
+	mapf, reducef := loadPlugin("wc.so")
 	mr.Worker(mapf, reducef)
 }
 
-//
 // load the application Map and Reduce functions
 // from a plugin file, e.g. ../mrapps/wc.so
-//
 func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(string, []string) string) {
+	//filename = "./" + filename
+	filename = "/home/zlaa123456/6.824/src/main/wc.so"
+	fmt.Printf("filename = %s\n", filename)
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("加载插件失败：", err)
+		}
+	}()
 	p, err := plugin.Open(filename)
 	if err != nil {
-		log.Fatalf("cannot load plugin %v", filename)
+		log.Fatalf("cannot load plugin %v :%v", filename, err)
 	}
 	xmapf, err := p.Lookup("Map")
 	if err != nil {
-		log.Fatalf("cannot find Map in %v", filename)
+		//panic(err)
+		log.Fatalf("cannot find Map in %v :%v", filename, err)
 	}
 	mapf := xmapf.(func(string, string) []mr.KeyValue)
 	xreducef, err := p.Lookup("Reduce")

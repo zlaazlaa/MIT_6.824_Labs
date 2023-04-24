@@ -51,7 +51,7 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 func DoingReduce(ClientSum int, hashNow int, ClientId int, reducef func(string, []string) string) {
 	fmt.Printf("Doing a reduce job, client id = %d, hashNow = %d, clientsum = %d\n", ClientId, hashNow, ClientSum)
 	i := 1
-	mainName := "mr-out" + strconv.Itoa(ClientId)
+	mainName := "mr-out-" + strconv.Itoa(ClientId)
 	mainFile, _ := os.Create(mainName)
 	defer func(mainFile *os.File) {
 		err := mainFile.Close()
@@ -64,39 +64,43 @@ func DoingReduce(ClientSum int, hashNow int, ClientId int, reducef func(string, 
 		OName := "mr-" + strconv.Itoa(i) + "-" + strconv.Itoa(hashNow)
 		OFile, err := os.OpenFile(OName, os.O_RDONLY, 0644)
 		if err != nil {
+			i++
 			continue
 		}
+		fmt.Printf("Read %s\n", OName)
 		dec := json.NewDecoder(OFile)
-		err = OFile.Close()
 		if err != nil {
+			fmt.Printf("Failed to close file: %s\n", OName)
 			return
 		}
 		for {
 			var kv KeyValue
 			if err := dec.Decode(&kv); err != nil {
+				fmt.Printf("Failed to decode file: %s\n", OName)
 				break
 			}
 			kva = append(kva, kv)
 		}
+		i++
+		err = OFile.Close()
 	}
+	fmt.Println("Reduce: Done Read")
 	sort.Sort(ByKey(kva))
 	l := 0
 	for l < len(kva) {
-		j := i + 1
-		for j < len(kva) {
-			if kva[i].Key != kva[j].Key {
-				break
-			}
+		j := l + 1
+		for j < len(kva) && kva[j].Key == kva[l].Key {
+			j++
 		}
 		var values []string
-		for k := i; k < j; k++ {
-			values = append(values, kva[i].Value)
+		for k := l; k < j; k++ {
+			values = append(values, kva[k].Value)
 		}
-		output := reducef(kva[i].Key, values)
-		fmt.Fprintf(mainFile, "%v %v\n", kva[i].Key, output)
-		i = j
+		output := reducef(kva[l].Key, values)
+		fmt.Fprintf(mainFile, "%v %v\n", kva[l].Key, output)
+		l = j
 	}
-	TellFinish(ClientId, make(map[int]bool), 1)
+	TellFinish(ClientId, make(map[int]bool), 1, hashNow)
 }
 
 func DoingMap(filename string, ClientId int, mapf func(string, string) []KeyValue) {
@@ -106,9 +110,6 @@ func DoingMap(filename string, ClientId int, mapf func(string, string) []KeyValu
 	}
 	var HanhNowList = make(map[int]bool)
 	var kva = DealSingleFile(filename, mapf)
-	for x, valuee := range kva {
-		fmt.Println(x, valuee)
-	}
 	i := 0
 	for i < len(kva) {
 		hashNow := ihash(kva[i].Key)
@@ -121,16 +122,15 @@ func DoingMap(filename string, ClientId int, mapf func(string, string) []KeyValu
 		ofile.Close()
 		i++
 	}
-	TellFinish(ClientId, HanhNowList, 0)
+	TellFinish(ClientId, HanhNowList, 0, 0)
 }
 
-func TellFinish(ClientId int, list map[int]bool, JobType int) bool {
-	args := TellFinishArgs{ClientId: ClientId, HashNowList: list, JobType: JobType}
+func TellFinish(ClientId int, list map[int]bool, JobType int, HashNow int) bool {
+	args := TellFinishArgs{ClientId: ClientId, HashNowList: list, JobType: JobType, HashNow: HashNow}
 	reply := TellFinishReply{}
-
 	ok := call("Coordinator.TellFinish", &args, &reply)
 	if ok {
-		fmt.Println("Client " + string(rune(ClientId)) + "ok!")
+		fmt.Println("Client " + string(rune(ClientId)) + " ok!")
 		return true
 	} else {
 		fmt.Println("Error, can tell finish!")

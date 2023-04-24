@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"log"
 	"sync"
 )
@@ -40,6 +41,7 @@ func (c *Coordinator) ReturnJob(args *RequireJobArgs, reply *RequireJobReply) er
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.jobStatus == 0 {
+		fmt.Printf("Statue now: %d\n", c.jobStatus)
 		if len(c.fileNameList) == 0 {
 			reply.ClientId = 0
 			return nil
@@ -50,7 +52,11 @@ func (c *Coordinator) ReturnJob(args *RequireJobArgs, reply *RequireJobReply) er
 		c.onProceedingList = append(c.onProceedingList, c.clientIdNext)
 		c.ClientFileNameMap[c.clientIdNext] = c.fileNameList[0]
 		c.clientIdNext++
-		c.fileNameList = append([]string{}, c.fileNameList[1:]...)
+		if len(c.fileNameList) == 1 {
+			c.fileNameList = []string{}
+		} else {
+			c.fileNameList = append([]string{}, c.fileNameList[1:]...)
+		}
 		if len(c.fileNameList) == 0 {
 			c.jobStatus = 1
 			// c.MapClientSum is only the sum of map client
@@ -61,6 +67,7 @@ func (c *Coordinator) ReturnJob(args *RequireJobArgs, reply *RequireJobReply) er
 			}
 		}
 	} else {
+		fmt.Printf("Statue now: %d\n", c.jobStatus)
 		reply.HashNow = c.HashList[0]
 		reply.ClientSum = c.MapClientSum
 		reply.ClientId = c.clientIdNext
@@ -84,18 +91,18 @@ func (c *Coordinator) TellFinish(args *TellFinishArgs, reply *TellFinishReply) e
 		}
 		c.onProceedingList = append(c.onProceedingList[:temp], c.onProceedingList[temp+1:]...)
 		c.ProceededList = append(c.ProceededList, args.ClientId)
-	} else if args.JobType == 1 {
 		for k, _ := range args.HashNowList {
 			c.HashMapListAll[k] = true
 		}
-		temp := 1
+	} else if args.JobType == 1 {
+		temp := -1
 		for idx, value := range c.ProceedingHash {
-			if value == args.ClientId {
+			if value == args.HashNow {
 				temp = idx
 			}
 		}
 		c.ProceedingHash = append(c.ProceedingHash[:temp], c.ProceedingHash[temp+1:]...)
-		c.ProceededList = append(c.ProceedHash, args.ClientId)
+		c.ProceedHash = append(c.ProceedHash, args.ClientId)
 	}
 	return nil
 }
@@ -133,6 +140,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c.clientIdNext = 1
 	c.ClientFileNameMap = map[int]string{}
 	c.jobStatus = 0
+	c.HashMapListAll = map[int]bool{}
 	// Your code here.
 
 	c.server()

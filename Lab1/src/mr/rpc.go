@@ -43,6 +43,7 @@ type TellFinishArgs struct {
 	JobType     int
 	ClientId    int
 	HashNowList map[int]bool
+	HashNow     int
 }
 
 type TellFinishReply struct {
