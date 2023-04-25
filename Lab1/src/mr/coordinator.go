@@ -25,6 +25,7 @@ type Coordinator struct {
 	HashList          []int
 	ProceedingHash    []int
 	ProceedHash       []int
+	ClientSum         int
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -38,10 +39,24 @@ func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 }
 
 func (c *Coordinator) ReturnJob(args *RequireJobArgs, reply *RequireJobReply) error {
+	//if c.jobStatus == 1 && len(c.ProceededList) != c.ClientSum {
+	//	for {
+	//		if len(c.ProceededList) == c.ClientSum {
+	//			fmt.Println("Waiting for map to complete")
+	//			break
+	//		}
+	//	}
+	//
+	//}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	//fmt.Printf("Proceeding hash size = %d\n", len(c.ProceedingHash))
+	fmt.Printf("Client id %d start!\n", c.clientIdNext)
+	fmt.Printf("JobStatus = %d\n", c.jobStatus)
+	fmt.Printf("%d %d\n", c.ClientSum, len(c.ProceededList))
+	//time.Sleep(5 * time.Second)
 	if c.jobStatus == 0 {
-		fmt.Printf("Statue now: %d\n", c.jobStatus)
+		//fmt.Printf("Statue now: %d\n", c.jobStatus)
 		if len(c.fileNameList) == 0 {
 			reply.ClientId = 0
 			return nil
@@ -58,23 +73,39 @@ func (c *Coordinator) ReturnJob(args *RequireJobArgs, reply *RequireJobReply) er
 			c.fileNameList = append([]string{}, c.fileNameList[1:]...)
 		}
 		if len(c.fileNameList) == 0 {
-			c.jobStatus = 1
+			//c.jobStatus = 1
 			// c.MapClientSum is only the sum of map client
 			c.MapClientSum = c.clientIdNext
-			// change map to a slice, convenient to use
-			for k, _ := range c.HashMapListAll {
-				c.HashList = append(c.HashList, k)
-			}
 		}
 	} else {
-		fmt.Printf("Statue now: %d\n", c.jobStatus)
+		//if c.HashList[0] == 1257227291 {
+		//	i := 1
+		//	for i < 10 {
+		//		fmt.Println("========================================================================================================================")
+		//		i++
+		//	}
+		//	fmt.Println(c.HashList[0])
+		//	fmt.Println(c.MapClientSum)
+		//	fmt.Println(c.clientIdNext)
+		//	time.Sleep(10 * time.Second)
+		//}
+		//fmt.Printf("Statue now: %d\n", c.jobStatus)
 		reply.HashNow = c.HashList[0]
 		reply.ClientSum = c.MapClientSum
 		reply.ClientId = c.clientIdNext
 		reply.JobType = 1
 		c.clientIdNext++
 		c.ProceedingHash = append(c.ProceedingHash, c.HashList[0])
+		//fmt.Printf("len  %d\n", len(c.ProceedingHash))
 		c.HashList = c.HashList[1:]
+
+		if reply.HashNow == 1464321167 {
+			fmt.Println(c.HashList[0])
+			fmt.Println(c.MapClientSum)
+			fmt.Println(c.clientIdNext - 1)
+			fmt.Println()
+			fmt.Println()
+		}
 	}
 	return nil
 }
@@ -92,7 +123,22 @@ func (c *Coordinator) TellFinish(args *TellFinishArgs, reply *TellFinishReply) e
 		c.onProceedingList = append(c.onProceedingList[:temp], c.onProceedingList[temp+1:]...)
 		c.ProceededList = append(c.ProceededList, args.ClientId)
 		for k, _ := range args.HashNowList {
+			if k == 1464321167 {
+				fmt.Println("QQQQQQQQq")
+			}
 			c.HashMapListAll[k] = true
+		}
+		fmt.Printf("ProceedList size = %d\n", len(c.ProceededList))
+		if len(c.ProceededList) == c.ClientSum {
+			fmt.Println("All map is done")
+			// change map to a slice, convenient to use
+			for k, _ := range c.HashMapListAll {
+				if k == 1464321167 {
+					fmt.Println("WWWWWWWWWWw")
+				}
+				c.HashList = append(c.HashList, k)
+			}
+			c.jobStatus = 1
 		}
 	} else if args.JobType == 1 {
 		temp := -1
@@ -141,7 +187,9 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c.ClientFileNameMap = map[int]string{}
 	c.jobStatus = 0
 	c.HashMapListAll = map[int]bool{}
+	c.ClientSum = len(files)
 	// Your code here.
+	fmt.Println("start")
 
 	c.server()
 	return &c

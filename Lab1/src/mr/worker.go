@@ -40,10 +40,10 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 		filename, ClientId, JobType, ClientSum, HashNow := RequireAJob()
 		if JobType == 0 {
 			DoingMap(filename, ClientId, mapf)
-			fmt.Println("Done the map")
+			//fmt.Println("Done the map")
 		} else if JobType == 1 {
 			DoingReduce(ClientSum, HashNow, ClientId, reducef)
-			fmt.Println("Done the reduce")
+			//fmt.Println("Done the reduce")
 		}
 	}
 }
@@ -60,31 +60,36 @@ func DoingReduce(ClientSum int, hashNow int, ClientId int, reducef func(string, 
 		}
 	}(mainFile)
 	var kva []KeyValue
-	for i < ClientSum {
+	//fmt.Printf("ClientSum = %d\n", ClientSum)
+	for i <= ClientSum {
+		//fmt.Println(i)
 		OName := "mr-" + strconv.Itoa(i) + "-" + strconv.Itoa(hashNow)
 		OFile, err := os.OpenFile(OName, os.O_RDONLY, 0644)
 		if err != nil {
 			i++
+			if hashNow == 1464321167 {
+				fmt.Println("EEEEEEEEE")
+			}
 			continue
 		}
-		fmt.Printf("Read %s\n", OName)
+		//fmt.Printf("Read %s\n", OName)
 		dec := json.NewDecoder(OFile)
-		if err != nil {
-			fmt.Printf("Failed to close file: %s\n", OName)
-			return
-		}
 		for {
 			var kv KeyValue
 			if err := dec.Decode(&kv); err != nil {
-				fmt.Printf("Failed to decode file: %s\n", OName)
+				//fmt.Printf("Failed to decode file: %s\n", OName)
 				break
 			}
 			kva = append(kva, kv)
 		}
 		i++
 		err = OFile.Close()
+		if err != nil {
+			fmt.Printf("Failed to close file: %s\n", OName)
+			return
+		}
 	}
-	fmt.Println("Reduce: Done Read")
+	//fmt.Println("Reduce: Done Read")
 	sort.Sort(ByKey(kva))
 	l := 0
 	for l < len(kva) {
@@ -130,7 +135,7 @@ func TellFinish(ClientId int, list map[int]bool, JobType int, HashNow int) bool 
 	reply := TellFinishReply{}
 	ok := call("Coordinator.TellFinish", &args, &reply)
 	if ok {
-		fmt.Println("Client " + string(rune(ClientId)) + " ok!")
+		//fmt.Printf("Client id = %d ok!\n", ClientId)
 		return true
 	} else {
 		fmt.Println("Error, can tell finish!")
@@ -146,8 +151,8 @@ func RequireAJob() (string, int, int, int, int) {
 
 	ok := call("Coordinator.ReturnJob", &args, &reply)
 	if ok {
-		fmt.Println(reply.FileName)
-		fmt.Println("Doing on " + reply.FileName)
+		//fmt.Println(reply.FileName)
+		//fmt.Println("Doing on " + reply.FileName)
 		return reply.FileName, reply.ClientId, reply.JobType, reply.ClientSum, reply.HashNow
 	} else {
 		fmt.Println("Error, no job reply!")

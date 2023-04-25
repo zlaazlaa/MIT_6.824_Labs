@@ -47,12 +47,6 @@ func main() {
 		}
 		file.Close()
 		kva := mapf(filename, string(content))
-		for _, valuee := range kva {
-			if valuee.Key == "a" {
-				fmt.Printf("666   ")
-				fmt.Println(valuee.Key, valuee.Value)
-			}
-		}
 		intermediate = append(intermediate, kva...)
 	}
 
